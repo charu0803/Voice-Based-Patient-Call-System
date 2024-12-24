@@ -1,0 +1,293 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  StatusBar,
+  ScrollView,
+  RefreshControl,
+} from 'react-native';
+import { Text, Surface, IconButton } from 'react-native-paper';
+import { useAuth } from '../../contexts/AuthContext';
+import { appointmentApi } from '../../services/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { format } from 'date-fns';
+import { Colors } from '../../theme'; // Import Colors
+
+interface Appointment {
+  id: string;
+  date: string;
+  time: string;
+  department: string;
+  status: string;
+  doctorName: string;
+  type: string;
+}
+
+export default function AppointmentScreen() {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
+
+  const fetchAppointments = async () => {
+    try {
+      const fetchedAppointments = await appointmentApi.fetchAppointments(user?.id);
+      setAppointments(fetchedAppointments);
+    } catch (error) {
+      console.error('Failed to fetch appointments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAppointments();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [user?.id]);
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return [Colors.primary, Colors.secondary];
+      case 'pending':
+        return ['#FF9800', '#F57C00'];
+      case 'cancelled':
+        return ['#F44336', '#D32F2F'];
+      default:
+        return ['#9E9E9E', '#757575'];
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.loadingIndicator} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={[Colors.primary, Colors.secondary] as const}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <BlurView intensity={20} style={styles.headerBlur}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>My Appointments</Text>
+            <IconButton
+              icon="plus"
+              iconColor="#fff"
+              size={24}
+              onPress={() => {
+                /* Handle new appointment */
+              }}
+              style={styles.headerButton}
+            />
+          </View>
+        </BlurView>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {appointments.length === 0 ? (
+          <Surface style={styles.emptyContainer}>
+            <Icon name="calendar-blank" size={48} color={Colors.text} />
+            <Text style={styles.emptyText}>No upcoming appointments</Text>
+            <Text style={styles.emptySubtext}>
+              Schedule a new appointment to get started
+            </Text>
+          </Surface>
+        ) : (
+          appointments.map((appointment) => (
+            <Surface key={appointment.id} style={styles.appointmentCard}>
+              <LinearGradient
+                colors={getStatusColor(appointment.status) as [string, string]}
+                style={styles.statusBadge}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.statusText}>
+                  {appointment.status.toUpperCase()}
+                </Text>
+              </LinearGradient>
+
+              <View style={styles.appointmentHeader}>
+                <View style={styles.appointmentType}>
+                  <Icon name="stethoscope" size={24} color={Colors.primary} />
+                  <Text style={styles.typeText}>{appointment.type}</Text>
+                </View>
+                <Text style={styles.departmentText}>
+                  {appointment.department}
+                </Text>
+              </View>
+
+              <View style={styles.appointmentDetails}>
+                <View style={styles.detailRow}>
+                  <Icon name="calendar" size={20} color={Colors.mutedText} />
+                  <Text style={styles.detailText}>
+                    {format(new Date(appointment.date), 'MMMM dd, yyyy')}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="clock-outline" size={20} color={Colors.mutedText} />
+                  <Text style={styles.detailText}>{appointment.time}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="doctor" size={20} color={Colors.mutedText} />
+                  <Text style={styles.detailText}>
+                    Dr. {appointment.doctorName}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.actionButtons}>
+                <IconButton
+                  icon="pencil"
+                  size={20}
+                  onPress={() => {
+                    /* Handle edit */
+                  }}
+                />
+                <IconButton
+                  icon="cancel"
+                  size={20}
+                  onPress={() => {
+                    /* Handle cancel */
+                  }}
+                  containerColor={Colors.border}
+                />
+              </View>
+            </Surface>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    paddingTop: 48,
+    paddingBottom: 16,
+  },
+  headerBlur: {
+    padding: 16,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  headerButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    borderRadius: 16,
+    marginTop: 32,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    color: Colors.text,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.mutedText,
+    marginTop: 8,
+  },
+  appointmentCard: {
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderTopLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  appointmentHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  appointmentType: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  typeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    color: Colors.text,
+  },
+  departmentText: {
+    fontSize: 14,
+    color: Colors.mutedText,
+  },
+  appointmentDetails: {
+    padding: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+});
